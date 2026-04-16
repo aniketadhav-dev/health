@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>MediBook - Appointment</title>
+    <style>
+        body { font-family: sans-serif; background: #f4f7f6; padding: 20px; text-align: center; }
+        .card { background: white; padding: 20px; border-radius: 8px; max-width: 400px; margin: auto; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        select, input, button { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 4px; }
+        button { background: #28a745; color: white; border: none; cursor: pointer; }
+        .list { text-align: left; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>🏥 MediBook</h1>
+    <div class="card">
+        <h3>Book Appointment</h3>
+        <input type="text" id="patient" placeholder="Your Name">
+        <select id="doctorList"></select>
+        <input type="date" id="date">
+        <button onclick="bookNow()">Book Now</button>
+    </div>
+
+    <div class="card list">
+        <h3>My Appointments</h3>
+        <ul id="appmtList"></ul>
+    </div>
+
+    <script>
+        async function loadData() {
+            // Get Doctors
+            const res = await fetch('/api/doctors');
+            const docs = await res.json();
+            const select = document.getElementById('doctorList');
+            select.innerHTML = docs.map(d => `<option value="${d}">${d}</option>`).join('');
+
+            // Get Appointments
+            const res2 = await fetch('/api/my-appointments');
+            const appmts = await res2.json();
+            const list = document.getElementById('appmtList');
+            list.innerHTML = appmts.map(a => `<li>${a.date}: ${a.doctor_name} for ${a.patient_name}</li>`).join('');
+        }
+
+        async function bookNow() {
+            const data = {
+                patient_name: document.getElementById('patient').value,
+                doctor_name: document.getElementById('doctorList').value,
+                date: document.getElementById('date').value
+            };
+            await fetch('/api/book', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+            alert("Booked!");
+            loadData();
+        }
+        loadData();
+    </script>
+</body>
+</html>
