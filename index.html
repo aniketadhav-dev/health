@@ -2,60 +2,147 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>MediBook - Appointment</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MediBook Pro | Healthcare</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        body { font-family: sans-serif; background: #f4f7f6; padding: 20px; text-align: center; }
-        .card { background: white; padding: 20px; border-radius: 8px; max-width: 400px; margin: auto; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        select, input, button { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 4px; }
-        button { background: #28a745; color: white; border: none; cursor: pointer; }
-        .list { text-align: left; margin-top: 20px; }
+        body { background: #f0f4f8; font-family: 'Inter', sans-serif; }
+        .glass { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); }
+        .tab-content { display: none; }
+        .active { display: block; }
     </style>
 </head>
-<body>
-    <h1>🏥 MediBook</h1>
-    <div class="card">
-        <h3>Book Appointment</h3>
-        <input type="text" id="patient" placeholder="Your Name">
-        <select id="doctorList"></select>
-        <input type="date" id="date">
-        <button onclick="bookNow()">Book Now</button>
+<body class="p-4 md:p-8">
+    <div class="max-w-5xl mx-auto">
+        <header class="flex justify-between items-center mb-8 glass p-6 rounded-2xl shadow-sm">
+            <h1 class="text-2xl font-bold text-blue-600"><i class="fa-solid fa-heart-pulse"></i> MediBook Pro</h1>
+            <nav class="space-x-4">
+                <button onclick="showTab('book')" class="text-gray-600 hover:text-blue-600 font-medium">Find Doctors</button>
+                <button onclick="showTab('dashboard')" class="bg-blue-600 text-white px-4 py-2 rounded-lg shadow-md">My Dashboard</button>
+            </nav>
+        </header>
+
+        <div id="book" class="tab-content active animate-fade-in">
+            <div class="grid md:grid-cols-3 gap-6">
+                <div class="glass p-6 rounded-2xl shadow-sm h-fit">
+                    <h3 class="font-bold mb-4">Search Specialist</h3>
+                    <input type="text" id="search" onkeyup="loadDoctors()" placeholder="e.g. Cardio" class="w-full p-3 border rounded-xl mb-4 focus:ring-2 focus:ring-blue-400 outline-none">
+                    <div class="text-sm text-gray-500">Popular: Cardio, Skin, Pediatrician</div>
+                </div>
+                <div class="md:col-span-2 grid grid-cols-1 gap-4" id="doctorGrid">
+                    </div>
+            </div>
+        </div>
+
+        <div id="dashboard" class="tab-content">
+            <div class="glass p-6 rounded-2xl shadow-sm">
+                <h2 class="text-xl font-bold mb-6">Upcoming Appointments</h2>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead>
+                            <tr class="text-gray-400 text-sm uppercase">
+                                <th class="pb-4">Patient</th>
+                                <th class="pb-4">Doctor</th>
+                                <th class="pb-4">Date</th>
+                                <th class="pb-4">Status</th>
+                                <th class="pb-4">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="appmtTable"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <div class="card list">
-        <h3>My Appointments</h3>
-        <ul id="appmtList"></ul>
+    <div id="modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white p-8 rounded-3xl max-w-sm w-full">
+            <h3 class="text-xl font-bold mb-4">Complete Booking</h3>
+            <p id="modalDoc" class="text-blue-600 mb-4 font-medium"></p>
+            <input type="text" id="patientName" placeholder="Patient Full Name" class="w-full p-3 border rounded-xl mb-4">
+            <input type="date" id="bookDate" class="w-full p-3 border rounded-xl mb-6">
+            <div class="flex space-x-3">
+                <button onclick="closeModal()" class="flex-1 text-gray-500">Cancel</button>
+                <button onclick="confirmBooking()" class="flex-1 bg-blue-600 text-white py-3 rounded-xl">Confirm</button>
+            </div>
+        </div>
     </div>
 
     <script>
-        async function loadData() {
-            // Get Doctors
-            const res = await fetch('/api/doctors');
-            const docs = await res.json();
-            const select = document.getElementById('doctorList');
-            select.innerHTML = docs.map(d => `<option value="${d}">${d}</option>`).join('');
+        let selectedDocId = null;
 
-            // Get Appointments
-            const res2 = await fetch('/api/my-appointments');
-            const appmts = await res2.json();
-            const list = document.getElementById('appmtList');
-            list.innerHTML = appmts.map(a => `<li>${a.date}: ${a.doctor_name} for ${a.patient_name}</li>`).join('');
+        function showTab(tab) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.getElementById(tab).classList.add('active');
+            if(tab === 'dashboard') loadAppointments();
         }
 
-        async function bookNow() {
-            const data = {
-                patient_name: document.getElementById('patient').value,
-                doctor_name: document.getElementById('doctorList').value,
-                date: document.getElementById('date').value
-            };
+        async function loadDoctors() {
+            const search = document.getElementById('search').value;
+            const res = await fetch(`/api/doctors?search=${search}`);
+            const docs = await res.json();
+            const grid = document.getElementById('doctorGrid');
+            grid.innerHTML = docs.map(d => `
+                <div class="glass p-6 rounded-2xl flex justify-between items-center shadow-sm border border-white hover:border-blue-300 transition-all">
+                    <div>
+                        <h4 class="font-bold text-lg">${d.name}</h4>
+                        <p class="text-blue-500 text-sm font-medium">${d.specialty}</p>
+                        <p class="text-gray-400 text-xs mt-1">Fee: ₹${d.fee}</p>
+                    </div>
+                    <button onclick="openBooking(${d.id}, '${d.name}')" class="bg-white text-blue-600 border border-blue-600 px-4 py-2 rounded-xl hover:bg-blue-600 hover:text-white transition">Book</button>
+                </div>
+            `).join('');
+        }
+
+        function openBooking(id, name) {
+            selectedDocId = id;
+            document.getElementById('modalDoc').innerText = "Booking with " + name;
+            document.getElementById('modal').classList.remove('hidden');
+        }
+
+        function closeModal() { document.getElementById('modal').classList.add('hidden'); }
+
+        async function confirmBooking() {
+            const patient = document.getElementById('patientName').value;
+            const date = document.getElementById('bookDate').value;
+            if(!patient || !date) return alert("Fill details");
+
             await fetch('/api/book', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(data)
+                body: JSON.stringify({doc_id: selectedDocId, patient, date})
             });
-            alert("Booked!");
-            loadData();
+            closeModal();
+            alert("Appointment Booked Successfully!");
+            showTab('dashboard');
         }
-        loadData();
+
+        async function loadAppointments() {
+            const res = await fetch('/api/my-appointments');
+            const data = await res.json();
+            const tbody = document.getElementById('appmtTable');
+            tbody.innerHTML = data.map(a => `
+                <tr class="border-t">
+                    <td class="py-4 font-medium">${a.patient_name}</td>
+                    <td class="py-4">${a.doc_name}</td>
+                    <td class="py-4 text-gray-500">${a.date}</td>
+                    <td class="py-4"><span class="bg-green-100 text-green-600 px-2 py-1 rounded text-xs">${a.status}</span></td>
+                    <td class="py-4">
+                        <button onclick="cancelApp(${a.id})" class="text-red-400 hover:text-red-600"><i class="fa-solid fa-trash"></i></button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function cancelApp(id) {
+            if(confirm("Cancel this appointment?")) {
+                await fetch(`/api/cancel/${id}`, {method: 'DELETE'});
+                loadAppointments();
+            }
+        }
+
+        loadDoctors();
     </script>
 </body>
 </html>
