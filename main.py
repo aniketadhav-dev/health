@@ -1,16 +1,14 @@
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
-from sqlalchemy import create_all, Column, Integer, String, Float, ForeignKey
+from sqlalchemy import create_engine, Column, Integer, String, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
-from pydantic import BaseModel
 import os
 
-# Database Setup
+# Database Setup - Fixed: create_engine use hota hai
 DATABASE_URL = "sqlite:///./healthcare.db"
 Base = declarative_base()
-engine = create_all(DATABASE_URL, connect_args={"check_same_thread": False})
+engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Models
@@ -29,6 +27,7 @@ class Appointment(Base):
     date = Column(String)
     status = Column(String, default="Confirmed")
 
+# Tables Create karna
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
@@ -39,7 +38,7 @@ def get_db():
     try: yield db
     finally: db.close()
 
-# Seed Doctors if empty
+# Seed Doctors data
 @app.on_event("startup")
 def seed():
     db = SessionLocal()
@@ -71,8 +70,17 @@ def book(data: dict, db: Session = Depends(get_db)):
 
 @app.get("/api/my-appointments")
 def get_apps(db: Session = Depends(get_db)):
-    results = db.execute("SELECT a.id, a.patient_name, a.date, a.status, d.name as doc_name FROM appointments a JOIN doctors d ON a.doctor_id = d.id").fetchall()
-    return [dict(row) for row in results]
+    # Raw SQL ko handle karne ke liye simple query use kar rahe hain
+    results = db.query(Appointment, Doctor).join(Doctor, Appointment.doctor_id == Doctor.id).all()
+    return [
+        {
+            "id": a.id,
+            "patient_name": a.patient_name,
+            "date": a.date,
+            "status": a.status,
+            "doc_name": d.name
+        } for a, d in results
+    ]
 
 @app.delete("/api/cancel/{id}")
 def cancel(id: int, db: Session = Depends(get_db)):
